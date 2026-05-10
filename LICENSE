@@ -1,21 +1,32 @@
-MIT License
+Desktop App License - Job Hunter
 
 Copyright (c) 2026 Job Hunter Contributors
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+TERMS AND CONDITIONS
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. EDUCATIONAL / ACADEMIC / NON-FOR-PROFIT USE (Free License)
+Permission is hereby granted, free of charge, to any person obtaining a copy of this Software, to use, modify, distribute, and sublicense the Software or derivative works thereof for:
+   - Individual education or learning purposes
+   - Academic research and classroom use
+   - Non-profit or charity endeavours
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+   Redistribution of derivative works must include attribution to all original authors and maintain this same license (Attribution & Share-Alike). No payment is required for activities within this scope.
+
+2. COMMERCIAL USE (Prohibited Without License)
+Commercial use is defined as any use intended for or directed toward commercial advantage or monetary compensation, including but not limited to:
+   - Selling products or services that rely on this Software
+   - Bundling this Software with paid offerings
+   - Deploying the Software in a corporate or enterprise environment for production purposes
+
+ANY COMMERCIAL USE IS STRICTLY PROHIBITED without a separate commercial license.
+Please contact the copyright holder to obtain a commercial license.
+
+3. RESTRICTIONS
+   a. You may not circumvent or remove the above educational / commercial licensing distinction.
+   b. If you use this Software to train a model, build a dataset, or create autonomous decision-making mechanisms capable of executing real-world tasks, you must obtain the explicit prior written consent of the copyright holder.
+   c. Patent grants by contributors are limited strictly to their direct contributions to the Software. No grant is made for any rights derived from hardware, data, AI models, or other non-software components.
+
+4. NO WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+(END OF LICENSE)
