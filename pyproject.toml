@@ -1,0 +1,27 @@
+[project]
+name = "job-hunter"
+version = "0.1.0"
+description = "Desktop application for scraping job postings and matching resumes"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "pyside6>=6.6.0",
+    "fastapi[standard]>=0.110.0",
+    "uvicorn>=0.29.0",
+    "aiosqlite>=0.20.0",
+    "pdfplumber>=0.11.0",
+    "llama-cpp-python>=0.2.70",
+    "pydantic>=2.6.0",
+    "python-multipart>=0.0.9",
+    "sentence-transformers>=2.5.0",
+    "requests>=2.31.0",
+]
+
+[project.scripts]
+job-hunter = "main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
