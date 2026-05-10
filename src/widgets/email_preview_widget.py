@@ -1,15 +1,16 @@
-"""Email preview widget with editable draft and mailto: action."""
+"""Premium 2027 email preview with split-pane editor and live preview."""
 
 import logging
 import urllib.parse
 import webbrowser
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
+    QSplitter,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -19,12 +20,13 @@ from features.email import EmailComposer
 from features.jobs import JobRepository
 from features.resume import ResumeRepository
 from shared.models import EmailDraft
+from .theme import QuantumTheme
 
 logger = logging.getLogger(__name__)
 
 
 class EmailPreviewWidget(QWidget):
-    """Display and edit a drafted email before opening the mail client."""
+    """Split-pane email composer with live preview and mailto action."""
 
     back_requested: Signal = Signal()
     """Emitted when the user clicks 'Back to Job'."""
@@ -42,40 +44,149 @@ class EmailPreviewWidget(QWidget):
         self._job_repository = job_repository
         self._resume_repository = resume_repository
         self._email_composer = email_composer
+        self._editing = False
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(20)
+
+        # ═══════════════ Header ════════════════
+        header = QHBoxLayout()
+        self._header_label = QLabel("Draft Email")
+        self._header_label.setObjectName("heading")
+        self._header_label.setStyleSheet(
+            f"color: {QuantumTheme.TEXT_PRIMARY}; font-size: {QuantumTheme.SIZE_HERO}; font-weight: 800;"
+        )
+        header.addWidget(self._header_label)
+        header.addStretch()
+        layout.addLayout(header)
+
+        # ═══════════════ Split Pane ════════════════
+        splitter = QSplitter()
+        splitter.setStyleSheet(
+            f"""
+            QSplitter::handle {{
+                background-color: {QuantumTheme.BORDER};
+                width: 2px;
+            }}
+            """
+        )
+
+        # Editor pane
+        editor_widget = self._build_editor_pane()
+        splitter.addWidget(editor_widget)
+
+        # Preview pane
+        preview_widget = self._build_preview_pane()
+        splitter.addWidget(preview_widget)
+
+        # Equal split
+        splitter.setSizes([600, 600])
+        layout.addWidget(splitter, stretch=1)
+
+        # ═══════════════ Action Bar ════════════════
+        action_bar = QWidget()
+        action_bar.setStyleSheet("background: transparent;")
+        action_layout = QHBoxLayout(action_bar)
+        action_layout.setContentsMargins(0, 0, 0, 0)
+        action_layout.setSpacing(12)
+        action_layout.addStretch()
+
+        self._edit_btn = QPushButton("✎  Edit Draft")
+        self._edit_btn.setObjectName("primary")
+        self._edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._edit_btn.clicked.connect(self._toggle_edit)
+        action_layout.addWidget(self._edit_btn)
+
+        self._send_btn = QPushButton("✉  Open in Mail Client")
+        self._send_btn.setObjectName("success")
+        self._send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._send_btn.clicked.connect(self._open_mail_client)
+        action_layout.addWidget(self._send_btn)
+
+        self._back_btn = QPushButton("←  Back to Job")
+        self._back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._back_btn.clicked.connect(self.back_requested.emit)
+        action_layout.addWidget(self._back_btn)
+
+        layout.addWidget(action_bar)
+
+    def _build_editor_pane(self) -> QWidget:
+        """Build the editable side of the split."""
+        w = QWidget()
+        QuantumTheme.apply_card_shadow(w)
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 24, 24, 24)
+        v.setSpacing(16)
+
+        sub = QLabel("Editor")
+        sub.setObjectName("subtitle")
+        sub.setStyleSheet(
+            f"color: {QuantumTheme.TEXT_PRIMARY}; font-size: {QuantumTheme.SIZE_SUBTITLE}; font-weight: 700;"
+        )
+        v.addWidget(sub)
 
         # Subject
-        subject_layout = QHBoxLayout()
-        subject_layout.addWidget(QLabel("Subject:"))
+        v.addWidget(self._m_label("Subject"))
         self._subject_edit = QTextEdit()
-        self._subject_edit.setMaximumHeight(40)
-        self._subject_edit.setReadOnly(True)
-        subject_layout.addWidget(self._subject_edit)
-        layout.addLayout(subject_layout)
+        self._subject_edit.setMaximumHeight(44)
+        self._subject_edit.setPlaceholderText("Email subject...")
+        v.addWidget(self._subject_edit)
 
         # Body
-        layout.addWidget(QLabel("Body:"))
+        v.addWidget(self._m_label("Body"))
         self._body_edit = QTextEdit()
+        self._body_edit.setPlaceholderText("Email body...")
+        v.addWidget(self._body_edit)
+
+        self._subject_edit.setReadOnly(True)
         self._body_edit.setReadOnly(True)
-        layout.addWidget(self._body_edit)
 
-        # Buttons
-        buttons = QHBoxLayout()
-        self._edit_btn = QPushButton("Edit Draft")
-        self._edit_btn.setCheckable(True)
-        self._edit_btn.toggled.connect(self._toggle_edit)
+        return w
 
-        self._send_btn = QPushButton("Open in Mail Client")
-        self._send_btn.clicked.connect(self._open_mail_client)
+    def _build_preview_pane(self) -> QWidget:
+        """Build the rendered-preview side of the split with accent accents."""
+        w = QWidget()
+        QuantumTheme.apply_card_shadow(w)
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 24, 24, 24)
+        v.setSpacing(16)
 
-        self._back_btn = QPushButton("Back to Job")
-        self._back_btn.clicked.connect(self.back_requested.emit)
+        sub = QLabel("Preview")
+        sub.setObjectName("subtitle")
+        sub.setStyleSheet(
+            f"color: {QuantumTheme.TEXT_PRIMARY}; font-size: {QuantumTheme.SIZE_SUBTITLE}; font-weight: 700;"
+        )
+        v.addWidget(sub)
 
-        buttons.addWidget(self._edit_btn)
-        buttons.addWidget(self._send_btn)
-        buttons.addWidget(self._back_btn)
-        layout.addLayout(buttons)
+        self._subject_preview = QLabel("—")
+        self._subject_preview.setStyleSheet(
+            f"color: {QuantumTheme.TEXT_PRIMARY}; font-size: {QuantumTheme.SIZE_TITLE}; font-weight: 700; padding: 8px 0;"
+        )
+        self._subject_preview.setWordWrap(True)
+        v.addWidget(self._subject_preview)
+
+        self._body_preview = QLabel("—")
+        self._body_preview.setStyleSheet(
+            f"color: {QuantumTheme.TEXT_SECONDARY}; font-size: {QuantumTheme.SIZE_BODY}; line-height: 1.6;"
+        )
+        self._body_preview.setWordWrap(True)
+        self._body_preview.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        v.addWidget(self._body_preview)
+
+        v.addStretch()
+
+        return w
+
+    @staticmethod
+    def _m_label(text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setStyleSheet(
+            f"color: {QuantumTheme.TEXT_MUTED}; font-size: {QuantumTheme.SIZE_SMALL}; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;"
+        )
+        return lbl
+
+    # ── Data Loading ─────────────────────────────────────────────────
 
     def load_draft(self, job_id: int) -> None:
         """Load an email draft for the given job ID using the EmailComposer."""
@@ -104,8 +215,18 @@ class EmailPreviewWidget(QWidget):
         self._body_edit.setPlainText(self._draft.body)
         self._subject_edit.setReadOnly(True)
         self._body_edit.setReadOnly(True)
-        self._edit_btn.setChecked(False)
-        self._edit_btn.setText("Edit Draft")
+        self._editing = False
+        self._edit_btn.setText("✎  Edit Draft")
+
+        self._update_preview()
+
+    def _update_preview(self) -> None:
+        """Sync editor content to preview pane."""
+        self._subject_preview.setText(self._subject_edit.toPlainText())
+        # Convert plain text to HTML-like line breaks for preview
+        body = self._body_edit.toPlainText()
+        body_html = body.replace("\n", "<br/>")
+        self._body_preview.setText(body_html)
 
     def _placeholder_draft(self, job_id: int) -> EmailDraft:
         """Return a fallback draft when data is unavailable."""
@@ -116,11 +237,19 @@ class EmailPreviewWidget(QWidget):
             job_id=job_id,
         )
 
-    def _toggle_edit(self, checked: bool) -> None:
+    # ── Interaction ──────────────────────────────────────────────────
+
+    def _toggle_edit(self) -> None:
         """Toggle read-only mode for the subject and body fields."""
-        self._subject_edit.setReadOnly(not checked)
-        self._body_edit.setReadOnly(not checked)
-        self._edit_btn.setText("Done Editing" if checked else "Edit Draft")
+        self._editing = not self._editing
+        self._subject_edit.setReadOnly(not self._editing)
+        self._body_edit.setReadOnly(not self._editing)
+        self._edit_btn.setText("Done Editing" if self._editing else "✎  Edit Draft")
+        self._edit_btn.setObjectName("primary" if not self._editing else "success")
+
+        if not self._editing:
+            # Sync back to preview
+            self._update_preview()
 
     def _open_mail_client(self) -> None:
         """Build a mailto: URL and open the default email client."""

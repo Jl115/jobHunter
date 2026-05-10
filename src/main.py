@@ -22,6 +22,9 @@ def main() -> None:
     app.setApplicationName("Job Hunter")
     app.setOrganizationName("job-hunter")
 
+    from widgets.theme import QuantumTheme
+    QuantumTheme.apply(app)
+
     controller = ApplicationController()
     controller.run()
 
