@@ -12,12 +12,16 @@ class PromptBuilder:
         "You are a job posting parser. "
         "Extract exactly 4 fields from the job posting and return ONLY a JSON object.\n"
         "Fields: title, company, location, description.\n"
+        "For description, output clean Markdown with ## section headers "
+        "(e.g., ## Requirements, ## Responsibilities, ## Benefits, ## About Us). "
+        "Preserve lists, bold text, and paragraph breaks.\n"
         "If a field is missing, use null.\n"
-        "No markdown, no explanation, only JSON."
+        "No markdown code fences around the JSON, no explanation, only raw JSON."
     )
 
     JSON_EXAMPLE: str = (
-        '{"title": "Software Engineer", "company": "Acme Corp", "location": "Berlin", "description": "Build web apps"}'
+        '{"title": "Software Engineer", "company": "Acme Corp", "location": "Berlin", '
+        '"description": "## About the Role\\n\\nWe are looking for...\\n\\n## Requirements\\n- 3+ years experience"}'
     )
 
     def build_user_prompt(self, raw_html: str) -> str:
@@ -27,9 +31,9 @@ class PromptBuilder:
         MAX_CHARS = 1800
         text = text[:MAX_CHARS]
         return (
-            f"Extract the 4 fields as JSON.\n"
+            "Extract the 4 fields as JSON. The description must be Markdown with ## headers.\n"
             f"{text}\n\n"
-            f"JSON:"
+            "JSON:"
         )
 
     def parse_response(self, response_text: str) -> dict:
@@ -65,8 +69,48 @@ class PromptBuilder:
                     return self._normalize(parsed)
             except json.JSONDecodeError:
                 pass
+            # Small models often emit literal newlines inside JSON strings.
+            # Sanitise control characters and retry.
+            sanitised = self._sanitise_json(json_match)
+            try:
+                parsed = json.loads(sanitised)
+                if isinstance(parsed, dict):
+                    return self._normalize(parsed)
+            except json.JSONDecodeError:
+                pass
 
         return {}
+
+    @staticmethod
+    def _sanitise_json(raw: str) -> str:
+        """Replace literal control characters inside JSON string values with escaped ones.
+
+        The standard library ``json`` module rejects literal newlines inside strings.
+        Small local models frequently emit them, so we sanitise before retrying.
+        """
+        # A cheap but safe approach: replace all literal control chars inside quoted strings.
+        # We do this character-by-character to only affect characters between quotes.
+        result: list[str] = []
+        in_string = False
+        escape = False
+        for ch in raw:
+            if escape:
+                result.append(ch)
+                escape = False
+                continue
+            if ch == "\\":
+                result.append(ch)
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                result.append(ch)
+                continue
+            if in_string and ch in "\n\r\t":
+                result.append("\\n" if ch in "\n\r" else "\\t")
+                continue
+            result.append(ch)
+        return "".join(result)
 
     @staticmethod
     def _extract_json(text: str) -> str | None:

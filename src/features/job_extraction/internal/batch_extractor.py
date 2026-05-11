@@ -31,7 +31,7 @@ class BatchExtractor:
 
         if len(text) <= self.chunk_size:
             # Short text — single pass
-            return self._single_extract(text)
+            return self._single_extract(text, raw_html)
 
         # Long text — split into overlapping chunks
         chunks = self._split_into_chunks(text)
@@ -40,22 +40,23 @@ class BatchExtractor:
         # Extract from each chunk and merge
         merged = self._extract_and_merge(chunks)
 
-        # Always store the full raw text in description as a fallback/primary source
-        # User still gets full content; LLM provides structured enrichment
+        # description_markdown carries the LLM-structured markdown.
+        # description carries the full raw plain text for matching / indexing.
         return Job(
             url="",
             source="",
             title=merged.get("title"),
             company=merged.get("company"),
             location=merged.get("location"),
-            description=text,  # full text is description
+            description=text,  # full plain text for semantic matching
+            description_markdown=merged.get("description"),
             raw_html=raw_html,
             scraped_at=None,  # type: ignore[arg-type]
         )
 
     # ── Internal helpers ─────────────────────────────────────────────
 
-    def _single_extract(self, text: str) -> Job:
+    def _single_extract(self, text: str, raw_html: str) -> Job:
         """Single-pass extraction for short text."""
         system_prompt = self.prompt_builder.SYSTEM_PROMPT
         user_prompt = self.prompt_builder.build_user_prompt(text)
@@ -67,8 +68,9 @@ class BatchExtractor:
             title=parsed.get("title"),
             company=parsed.get("company"),
             location=parsed.get("location"),
-            description=text,  # full original text
-            raw_html=text,
+            description=text,  # full plain text
+            description_markdown=parsed.get("description"),
+            raw_html=raw_html,
             scraped_at=None,  # type: ignore[arg-type]
         )
 

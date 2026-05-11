@@ -47,17 +47,60 @@ class Database:
         logger.info("Database initialised at %s", DATABASE_PATH)
 
     def _run_migrations(self, conn: sqlite3.Connection) -> None:
-        """Execute SQL migration files in lexicographic order."""
+        """Execute SQL migration files in lexicographic order, skipping already-applied ones.
+
+        Tracks applied migrations in ``schema_migrations`` so the app never crashes
+        on restart when a column/index already exists.
+        """
         migrations_dir = Path(__file__).parent / "migrations"
         if not migrations_dir.exists():
             logger.warning("No migrations directory found at %s", migrations_dir)
             return
 
-        for migration_file in sorted(migrations_dir.glob("*.sql")):
-            sql = migration_file.read_text(encoding="utf-8")
-            conn.executescript(sql)
-            logger.info("Applied migration: %s", migration_file.name)
+        # Ensure tracking table exists (back-compat for DBs created before this logic)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "  filename TEXT PRIMARY KEY,"
+            "  applied_at TEXT DEFAULT (datetime('now'))"
+            ")"
+        )
         conn.commit()
+
+        # Determine which migrations have already run
+        applied = {
+            row[0]
+            for row in conn.execute("SELECT filename FROM schema_migrations").fetchall()
+        }
+
+        for migration_file in sorted(migrations_dir.glob("*.sql")):
+            name = migration_file.name
+            if name in applied:
+                logger.debug("Skipping already-applied migration: %s", name)
+                continue
+
+            sql = migration_file.read_text(encoding="utf-8")
+            try:
+                conn.executescript(sql)
+                conn.execute(
+                    "INSERT INTO schema_migrations (filename) VALUES (?)",
+                    (name,),
+                )
+                conn.commit()
+                logger.info("Applied migration: %s", name)
+            except sqlite3.OperationalError as exc:
+                # If the migration fails because the change is already present
+                # (e.g. column already exists), log and mark it applied so the
+                # app doesn't crash on restart.
+                err = str(exc).lower()
+                if "duplicate column name" in err or "already exists" in err:
+                    logger.warning("Migration %s partially applied: %s", name, exc)
+                    conn.execute(
+                        "INSERT INTO schema_migrations (filename) VALUES (?)",
+                        (name,),
+                    )
+                    conn.commit()
+                else:
+                    raise
 
     def get_connection(self) -> sqlite3.Connection:
         """Return a new ``sqlite3`` connection.

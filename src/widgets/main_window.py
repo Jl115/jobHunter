@@ -220,8 +220,8 @@ class MainWindow(QMainWindow):
 
     def _on_job_selected(self, job_id: int) -> None:
         """Load a job into the detail view and switch to it."""
-        self._job_detail.load_job(job_id)
         self._show_page(1)
+        self._job_detail.load_job(job_id)
 
     def _on_draft_email(self, job_id: int) -> None:
         """Load an email draft and switch to the email page."""

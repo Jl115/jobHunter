@@ -1,19 +1,17 @@
-"""Premium 2027 job detail view with hero header, score gauge, and action bar."""
+"""Premium 2027 job detail view with hero header, compact top-right stats, and full-width description."""
 
 import logging
+import webbrowser
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
     QSizePolicy,
-    QSpacerItem,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -23,6 +21,7 @@ from features.resume import ResumeExtractor, ResumeParser, ResumeRepository
 from shared.app_state import AppState
 from workers import MatchWorker
 from .theme import QuantumTheme
+from .markdown_viewer import MarkdownViewer
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,10 @@ class _Card(QFrame):
     """Elevated card with subtle border and optional padding."""
 
     def __init__(
-        self, title: str = "", padding: int = 24, parent: QWidget | None = None
+        self,
+        title: str = "",
+        padding: int = 24,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("card")
@@ -61,35 +63,66 @@ class _Card(QFrame):
         return self._body_layout
 
 
-class ScoreGauge(QLabel):
-    """Large circular match score display."""
+class _OpenLinkButton(QPushButton):
+    """Compact pill button that opens a URL in the default browser."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__("Open Link", parent)
+        self._url = ""
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: {QuantumTheme.BG_INPUT};
+                color: {QuantumTheme.ACCENT_PRIMARY};
+                border: 1px solid {QuantumTheme.BORDER};
+                border-radius: 10px;
+                padding: 4px 14px;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background-color: {QuantumTheme.BG_CARD};
+                border-color: {QuantumTheme.ACCENT_PRIMARY};
+            }}
+            """
+        )
+        self.clicked.connect(self._on_click)
+
+    def set_url(self, url: str) -> None:
+        """Store the URL and enable/disable the button."""
+        self._url = url
+        self.setEnabled(bool(url))
+        # Show full URL as tooltip
+        self.setToolTip(url if url else "")
+
+    def _on_click(self) -> None:
+        if self._url:
+            webbrowser.open(self._url)
+
+
+class _ScoreBadge(QLabel):
+    """Compact coloured match-score badge."""
+
+    def __init__(self, score: float = 0.0, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._score = 0.0
-        self.setMinimumSize(160, 160)
-        self.setMaximumSize(200, 200)
+        self.set_score(score)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._update_display()
 
     def set_score(self, score: float) -> None:
-        self._score = score
-        self._update_display()
-
-    def _update_display(self) -> None:
-        colour = QuantumTheme.score_color(self._score)
-        label = QuantumTheme.score_label(self._score)
-        self.setText(f"<b>{self._score:.0%}</b><br/><span style='font-size:11px;font-weight:500;'>{label}</span>")
+        colour = QuantumTheme.score_color(score)
+        label = QuantumTheme.score_label(score)
+        font_size = "13px" if score >= 0.8 else "12px"
+        self.setText(f"<b>{score:.0%}</b>  <span style='font-size:10px;opacity:0.8;'>{label}</span>")
         self.setStyleSheet(
             f"""
             QLabel {{
-                background-color: {QuantumTheme.BG_CARD};
-                border: 2px solid {colour};
-                border-radius: {self.width() // 2}px;
-                color: {colour};
-                font-size: 32px;
+                background-color: {colour};
+                color: {QuantumTheme.BG_DEEP};
+                border-radius: 12px;
+                padding: 4px 12px;
+                font-size: {font_size};
                 font-weight: 800;
-                padding: 20px;
             }}
             """
         )
@@ -116,7 +149,7 @@ class _InfoPill(QLabel):
 
 
 class JobDetailWidget(QWidget):
-    """Premium 2027 job detail with hero, score gauge, and description."""
+    """Premium 2027 job detail with hero stats, full-width description, and action bar."""
 
     draft_email_requested: Signal = Signal(int)
 
@@ -142,108 +175,87 @@ class JobDetailWidget(QWidget):
         self._hero_card = _Card(padding=28)
         hero = self._hero_card.body
 
-        # Source + status row
-        meta_row = QHBoxLayout()
-        meta_row.setSpacing(10)
+        # Top row: Source/status on the LEFT, compact score + details on the RIGHT
+        top = QHBoxLayout()
+        top.setSpacing(10)
+
+        # ── Left: Source & status badges
         self._source_badge = QLabel("LINKEDIN")
         self._source_badge.setObjectName("badge")
         self._source_badge.setStyleSheet(
             f"background-color: {QuantumTheme.BADGE_LINKEDIN}; color: #fff; border-radius: 8px; padding: 3px 12px; font-size: 10px; font-weight: 700;"
         )
-        meta_row.addWidget(self._source_badge)
+        top.addWidget(self._source_badge)
 
         self._status_badge = QLabel("NEW")
         self._status_badge.setObjectName("badge")
         self._status_badge.setStyleSheet(
             f"background-color: {QuantumTheme.ACCENT_PRIMARY}; color: {QuantumTheme.BG_DEEP}; border-radius: 8px; padding: 3px 12px; font-size: 10px; font-weight: 700;"
         )
-        meta_row.addWidget(self._status_badge)
-        meta_row.addStretch()
+        top.addWidget(self._status_badge)
 
         self._extraction_status = QLabel("✓ Extracted")
         self._extraction_status.setStyleSheet(
             f"color: {QuantumTheme.BORDER_SUCCESS}; font-size: 12px; font-weight: 600;"
         )
         self._extraction_status.setVisible(False)
-        meta_row.addWidget(self._extraction_status)
-        hero.addLayout(meta_row)
+        top.addWidget(self._extraction_status)
 
-        # Title
+        top.addStretch()
+
+        # ── Right: compact score badge
+        self._score_badge = _ScoreBadge()
+        top.addWidget(self._score_badge)
+        hero.addLayout(top)
+
+        # ── Title (smaller hero size)
         self._title_label = QLabel("—")
         self._title_label.setObjectName("heading")
         self._title_label.setStyleSheet(
-            f"color: {QuantumTheme.TEXT_PRIMARY}; font-size: {QuantumTheme.SIZE_HERO}; font-weight: 800; letter-spacing: -0.5px; padding-top: 4px;"
+            f"color: {QuantumTheme.TEXT_PRIMARY}; font-size: {QuantumTheme.SIZE_TITLE}; font-weight: 800; letter-spacing: -0.3px; padding-top: 4px;"
         )
         self._title_label.setWordWrap(True)
         hero.addWidget(self._title_label)
 
-        # Company + location pills
-        pills = QHBoxLayout()
-        pills.setSpacing(8)
+        # ── Bottom row: Company + location pills (left), URL + scraped stacked (right)
+        bottom = QHBoxLayout()
+        bottom.setSpacing(8)
+
+        # Left: company & location
         self._company_pill = _InfoPill("🏢", "—")
-        pills.addWidget(self._company_pill)
+        bottom.addWidget(self._company_pill)
         self._location_pill = _InfoPill("📍", "—")
-        pills.addWidget(self._location_pill)
-        pills.addStretch()
-        hero.addLayout(pills)
+        bottom.addWidget(self._location_pill)
+
+        bottom.addStretch()
+
+        # Right: URL above scraped timestamp, vertically stacked
+        details_stack = QVBoxLayout()
+        details_stack.setSpacing(2)
+        details_stack.setContentsMargins(0, 0, 0, 0)
+        details_stack.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        self._url_label = _OpenLinkButton()
+        details_stack.addWidget(self._url_label)
+
+        self._scraped_label = QLabel("—")
+        self._scraped_label.setStyleSheet(
+            f"color: {QuantumTheme.TEXT_MUTED}; font-size: 11px;"
+        )
+        self._scraped_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        details_stack.addWidget(self._scraped_label)
+
+        bottom.addLayout(details_stack)
+        hero.addLayout(bottom)
 
         layout.addWidget(self._hero_card)
 
-        # ═══════════════ Two Column Layout ════════════════
-        cols = QHBoxLayout()
-        cols.setSpacing(20)
-
-        # ── Left Column: Score + Meta ──
-        left = QVBoxLayout()
-        left.setSpacing(16)
-
-        # Score card
-        self._score_card = _Card("Match Score")
-        score_layout = self._score_card.body
-        self._score_gauge = ScoreGauge()
-        score_layout.addWidget(self._score_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Score breakdown
-        self._score_breakdown = QLabel("No resume uploaded yet")
-        self._score_breakdown.setObjectName("muted")
-        self._score_breakdown.setStyleSheet(
-            f"color: {QuantumTheme.TEXT_MUTED}; font-size: 12px; text-align: center;"
-        )
-        self._score_breakdown.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        score_layout.addWidget(self._score_breakdown)
-        left.addWidget(self._score_card)
-
-        # URL card
-        self._url_card = _Card("Details")
-        url_layout = self._url_card.body
-        self._url_label = QLabel("—")
-        self._url_label.setStyleSheet(
-            f"color: {QuantumTheme.ACCENT_PRIMARY}; font-size: 12px; font-weight: 500;"
-        )
-        self._url_label.setWordWrap(True)
-        url_layout.addWidget(self._url_label)
-        self._scraped_label = QLabel("—")
-        self._scraped_label.setObjectName("muted")
-        self._scraped_label.setStyleSheet(f"color: {QuantumTheme.TEXT_MUTED}; font-size: 11px;")
-        url_layout.addWidget(self._scraped_label)
-        left.addWidget(self._url_card)
-
-        left.addStretch()
-        cols.addLayout(left, stretch=1)
-
-        # ── Right Column: Description ──
+        # ═══════════════ Description (main, takes most space) ════════════════
         self._desc_card = _Card("Description")
         desc = self._desc_card.body
-        self._description_edit = QTextEdit()
-        self._description_edit.setReadOnly(True)
-        self._description_edit.setPlaceholderText("Job description will appear here...")
-        self._description_edit.setMinimumHeight(300)
-        desc.addWidget(self._description_edit)
-        cols.addWidget(self._desc_card, stretch=2)
-
-        # Make columns equal height
-        cols.setStretch(1, 1)
-        layout.addLayout(cols, stretch=1)
+        self._markdown_viewer = MarkdownViewer()
+        desc.addWidget(self._markdown_viewer)
+        layout.addWidget(self._desc_card, stretch=1)
 
         # ═══════════════ Action Bar ════════════════
         action_bar = QFrame()
@@ -322,9 +334,9 @@ class JobDetailWidget(QWidget):
         self._status_badge.setText(job.status.value.upper())
         status_colours = {
             "new": QuantumTheme.ACCENT_PRIMARY,
-            "extracting": QuantumTheme.BORDER_WARNING,
-            "extracted": QuantumTheme.BORDER_SUCCESS,
-            "failed": QuantumTheme.BORDER_DANGER,
+            "viewed": QuantumTheme.BORDER,
+            "applied": QuantumTheme.BORDER_SUCCESS,
+            "rejected": QuantumTheme.BORDER_DANGER,
         }
         status_colour = status_colours.get(job.status.value, QuantumTheme.BORDER)
         self._status_badge.setStyleSheet(
@@ -334,22 +346,20 @@ class JobDetailWidget(QWidget):
         # Extraction done indicator
         self._extraction_status.setVisible(job.status.value != "new")
 
-        # ── Score ──
-        self._score_gauge.set_score(job.match_score)
+        # ── Top-right stats (compact score + details) ──
+        self._score_badge.set_score(job.match_score)
         if job.match_score > 0:
-            self._score_breakdown.setText(
-                f"Matched against your uploaded resume"
-            )
+            self._score_badge.setToolTip("Matched against your uploaded resume")
         else:
-            self._score_breakdown.setText("Upload a resume to see a match score")
+            self._score_badge.setToolTip("Upload a resume to get a match score")
 
-        # ── Details ──
-        self._url_label.setText(f"<a href='{job.url}' style='color: {QuantumTheme.ACCENT_PRIMARY};'>{job.url[:80]}...</a>" if len(job.url) > 80 else f"<a href='{job.url}' style='color: {QuantumTheme.ACCENT_PRIMARY};'>{job.url}</a>")
-        self._url_label.setOpenExternalLinks(True)
+        self._url_label.set_url(job.url)
         self._scraped_label.setText(f"Scraped: {job.scraped_at}")
 
         # ── Description ──
-        self._description_edit.setPlainText(job.description or "No description extracted yet.")
+        self._markdown_viewer.set_markdown(
+            job.description_markdown or job.description or "No description extracted yet."
+        )
 
         logger.info("Loaded job %d: %s at %s", job_id, job.title, job.company)
 
@@ -360,11 +370,10 @@ class JobDetailWidget(QWidget):
         self._location_pill.setText(" 📍  Unknown ")
         self._source_badge.setText("?")
         self._status_badge.setText("ERROR")
-        self._score_gauge.set_score(0.0)
-        self._score_breakdown.setText("—")
-        self._url_label.setText("—")
+        self._score_badge.set_score(0.0)
+        self._url_label.set_url("")
         self._scraped_label.setText("—")
-        self._description_edit.setPlainText("")
+        self._markdown_viewer.set_markdown("")
 
     def _on_jobs_updated(self) -> None:
         """If the currently displayed job changes behind the scenes, refresh it."""

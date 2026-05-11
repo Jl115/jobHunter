@@ -26,6 +26,10 @@ class Job(BaseModel):
     company: str | None = None
     location: str | None = None
     description: str | None = None
+    description_markdown: str | None = Field(
+        default=None,
+        description="LLM-extracted markdown description with ## headers for rich rendering",
+    )
     raw_html: str = Field(..., description="Clean article HTML from Readability.js")
     scraped_at: datetime | None = None
     extracted_at: datetime | None = None

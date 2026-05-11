@@ -40,3 +40,10 @@ CREATE TABLE IF NOT EXISTS applications (
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_scraped_at ON jobs(scraped_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_match_score ON jobs(match_score);
+
+-- Migration tracking table (must be added to the init schema so it exists before
+-- any migration runner logic tries to use it on a brand-new database).
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    filename TEXT PRIMARY KEY,
+    applied_at TEXT DEFAULT (datetime('now'))
+);

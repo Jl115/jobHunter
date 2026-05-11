@@ -28,8 +28,8 @@ class JobRepository:
                 cursor = conn.execute(
                     """
                     INSERT INTO jobs (url, source, title, company, location,
-                                      description, raw_html, scraped_at, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                      description, description_markdown, raw_html, scraped_at, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         job.url,
@@ -38,6 +38,7 @@ class JobRepository:
                         job.company,
                         job.location,
                         job.description,
+                        job.description_markdown,
                         job.raw_html,
                         job.scraped_at.isoformat() if job.scraped_at else None,
                         job.status.value,
@@ -97,13 +98,14 @@ class JobRepository:
         company: str | None,
         location: str | None,
         description: str | None,
+        description_markdown: str | None = None,
     ) -> None:
         """Update structured fields after LLM extraction, preserving existing data."""
         conn = self.database.get_connection()
         with conn:
             # Fetch current values so we don't overwrite with nulls
             cursor = conn.execute(
-                "SELECT title, company, location, description FROM jobs WHERE id = ?",
+                "SELECT title, company, location, description, description_markdown FROM jobs WHERE id = ?",
                 (job_id,),
             )
             row = cursor.fetchone()
@@ -115,12 +117,13 @@ class JobRepository:
             new_company = company if company else row[1]
             new_location = location if location else row[2]
             new_description = description if description else row[3]
+            new_markdown = description_markdown if description_markdown else row[4]
 
             conn.execute(
                 """
                 UPDATE jobs
                 SET title = ?, company = ?, location = ?,
-                    description = ?, extracted_at = ?
+                    description = ?, description_markdown = ?, extracted_at = ?
                 WHERE id = ?
                 """,
                 (
@@ -128,6 +131,7 @@ class JobRepository:
                     new_company,
                     new_location,
                     new_description,
+                    new_markdown,
                     datetime.utcnow().isoformat(),
                     job_id,
                 ),

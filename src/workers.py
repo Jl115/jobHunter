@@ -39,17 +39,20 @@ class ExtractionWorker(QRunnable):
             logger.info("Starting LLM extraction for job %d", self.job_id)
             extracted = self.extractor.extract(self.raw_html)
             logger.info(
-                "LLM extraction for job %d returned: title=%r company=%r location=%r desc_len=%d",
+                "LLM extraction for job %d returned: title=%r company=%r location=%r "
+                "desc_len=%d markdown_len=%d",
                 self.job_id,
                 extracted.title,
                 extracted.company,
                 extracted.location,
                 len(extracted.description or ""),
+                len(extracted.description_markdown or ""),
             )
 
             # If the LLM returns nothing useful, fall back to the raw HTML as description
             # so the user at least sees the scraped text.
             desc = extracted.description or self.raw_html
+            markdown = extracted.description_markdown or extracted.description
 
             self.repository.update_extraction(
                 self.job_id,
@@ -57,6 +60,7 @@ class ExtractionWorker(QRunnable):
                 company=extracted.company,
                 location=extracted.location,
                 description=desc,
+                description_markdown=markdown,
             )
             self.repository.update_status(self.job_id, extracted.status)
             logger.info("Extraction completed for job %d", self.job_id)
